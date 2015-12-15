@@ -5,7 +5,8 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 
-public class MainActivity extends AppCompatActivity implements MainFragment.AddItemListener, MainFragment.ViewItemListener{
+public class MainActivity extends AppCompatActivity implements MainFragment.AddItemListener, MainFragment.ViewItemListener,
+        AllItemFragment.AddItemListener2, AllItemFragment.ViewItemListener2{
     private static FragmentManager fragmentManager;
 
     @Override
@@ -31,9 +32,30 @@ public class MainActivity extends AppCompatActivity implements MainFragment.AddI
 
     @Override
     public void viewItem() {
-        ViewItemFragment addItemFragment = new ViewItemFragment();
+        AllItemFragment allItemFragment = new AllItemFragment();
+        fragmentManager.beginTransaction()
+                .replace(R.id.fl1, allItemFragment)
+                .addToBackStack(null)
+                .commit();
+    }
+
+    @Override
+    public void addItem2() {
+        AddItemFragment addItemFragment = new AddItemFragment();
         fragmentManager.beginTransaction()
                 .replace(R.id.fl1, addItemFragment)
+                .addToBackStack(null)
+                .commit();
+    }
+
+    @Override
+    public void viewItem2(String bagId) {
+        ViewItemFragment viewItemFragment = new ViewItemFragment();
+        Bundle bundle = new Bundle();
+        bundle.putString("ID", bagId);
+        viewItemFragment.setArguments(bundle);
+        fragmentManager.beginTransaction()
+                .replace(R.id.fl1, viewItemFragment)
                 .addToBackStack(null)
                 .commit();
     }

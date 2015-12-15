@@ -1,110 +1,207 @@
 package com.example.fm.bagscanner2;
 
+import android.app.AlertDialog;
 import android.app.Fragment;
+import android.app.FragmentManager;
+import android.app.ProgressDialog;
+import android.content.DialogInterface;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ListView;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
 
 /**
  * Created by FM on 12/12/2015.
  */
 public class ViewItemFragment extends Fragment {
-    String url = "http://madserver.comlu.com/view_item.php";
-    String jsonResult;
-    ListView lv;
+    private EditText idET;
+    private EditText dateET;
+    private EditText itemET;
+
+    private Button updateB;
+    private Button deleteB;
+
+    private String id;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        View v = inflater.inflate(R.layout.view_item, container, false);
-        lv = (ListView) v.findViewById(R.id.list);
-        accessWebService();
+        View v = inflater.inflate(R.layout.view_item_fragment, container, false);
+        idET = (EditText) v.findViewById(R.id.idET);
+        dateET = (EditText) v.findViewById(R.id.dateET);
+        itemET = (EditText) v.findViewById(R.id.itemET);
+
+        updateB = (Button) v.findViewById(R.id.updateB);
+        updateB.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                updateItem();
+            }
+        });
+        deleteB = (Button) v.findViewById(R.id.deleteB);
+        deleteB.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                confirmDeleteItem();
+            }
+        });
+
+        Bundle bundle = this.getArguments();
+        id = bundle.getString("ID");
+        idET.setText(id);
+
+        getItem();
+
         return v;
     }
 
-    // Async Task to access the web
-    private class JsonReadTask extends AsyncTask<String, Void, String> {
-        @Override
-        protected String doInBackground(String... params) {
-            try {
-                URL ulrn = new URL(url);
-                HttpURLConnection con = (HttpURLConnection) ulrn.openConnection();
-                InputStream response = con.getInputStream();
-                jsonResult = inputStreamToString(response).toString();
+    private void getItem(){
+        class GetItem extends AsyncTask<Void,Void,String> {
+            ProgressDialog loading;
+            @Override
+            protected void onPreExecute() {
+                super.onPreExecute();
+                loading = ProgressDialog.show(getActivity(),"Fetching...","Wait...",false,false);
             }
-            catch (MalformedURLException e){
-                e.printStackTrace();
-            }
-            catch(IOException e)
-            {
-                e.printStackTrace();
-            }
-            return null;
-        }
-        private StringBuilder inputStreamToString(InputStream is) {
-            String rLine = "";
-            StringBuilder answer = new StringBuilder();
-            BufferedReader rd = new BufferedReader(new InputStreamReader(is));
-            try {
-                while ((rLine = rd.readLine()) != null) {
-                    answer.append(rLine);
-                }
-            }
-            catch (IOException e) {
-                Toast.makeText(getActivity(), "Error..." + e.toString(),
-                        Toast.LENGTH_LONG).show();
-            }
-            return answer;
-        }
-        @Override
-        protected void onPostExecute(String result) {
-            createItems();
-        }
-    }// end async task
 
-    public void accessWebService() {
-        JsonReadTask task = new JsonReadTask();
-        // passes values for the urls string array
-        task.execute(new String[]{url});
+            @Override
+            protected void onPostExecute(String s) {
+                super.onPostExecute(s);
+                loading.dismiss();
+                showItem(s);
+            }
+
+            @Override
+            protected String doInBackground(Void... params) {
+                RequestHandler rh = new RequestHandler();
+                String s = rh.sendGetRequestParam(Config.URL_GET_EMP,id);
+                return s;
+            }
+        }
+        GetItem gi = new GetItem();
+        gi.execute();
+    }
+
+    private void showItem(String json){
+        try {
+            JSONObject jsonObject = new JSONObject(json);
+            JSONArray result = jsonObject.getJSONArray(Config.TAG_JSON_ARRAY);
+            JSONObject c = result.getJSONObject(0);
+            String date = c.getString(Config.TAG_DATE);
+            String item = c.getString(Config.TAG_ITEM);
+
+            dateET.setText(date);
+            itemET.setText(item);
+
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
     }
 
 
-    public void createItems() {
-        List<Item> itemList = new ArrayList<Item>();
-        try {
-            JSONObject jsonResponse = new JSONObject(jsonResult);
-            JSONArray jsonMainNode = jsonResponse.optJSONArray("item");
-            for (int i = 0; i < jsonMainNode.length(); i++) {
-                JSONObject jsonChildNode = jsonMainNode.getJSONObject(i);
-                Item it = new Item();
-                it.date = "Date: " + jsonChildNode.optString("date");
-                it.item = "Item to Bring: " + jsonChildNode.optString("item");
-                itemList.add(it);
+    private void updateItem(){
+        final String date = dateET.getText().toString().trim();
+        final String item = itemET.getText().toString().trim();
+
+        class UpdateItem extends AsyncTask<Void,Void,String>{
+            ProgressDialog loading;
+            @Override
+            protected void onPreExecute() {
+                super.onPreExecute();
+                loading = ProgressDialog.show(getActivity(),"Updating...","Wait...",false,false);
             }
-        } catch (JSONException e) {
-            Toast.makeText(getActivity(), "Error..." + e.toString(),
-                    Toast.LENGTH_LONG).show();
+
+            @Override
+            protected void onPostExecute(String s) {
+                super.onPostExecute(s);
+                loading.dismiss();
+                Toast.makeText(getActivity(), s, Toast.LENGTH_LONG).show();
+            }
+
+            @Override
+            protected String doInBackground(Void... params) {
+                HashMap<String,String> hashMap = new HashMap<>();
+                hashMap.put(Config.KEY_BAG_ID,id);
+                hashMap.put(Config.KEY_BAG_DATE,date);
+                hashMap.put(Config.KEY_BAG_ITEM,item);
+
+                RequestHandler rh = new RequestHandler();
+
+                String s = rh.sendPostRequest(Config.URL_UPDATE_EMP,hashMap);
+
+                return s;
+            }
         }
 
-        CustomAdapter ca = new CustomAdapter(getActivity(), itemList);
-        lv.setAdapter(ca);
+        UpdateItem ui = new UpdateItem();
+        ui.execute();
+    }
+
+    private void deleteItem(){
+        class DeleteItem extends AsyncTask<Void,Void,String> {
+            ProgressDialog loading;
+
+            @Override
+            protected void onPreExecute() {
+                super.onPreExecute();
+                loading = ProgressDialog.show(getActivity(), "Updating...", "Wait...", false, false);
+            }
+
+            @Override
+            protected void onPostExecute(String s) {
+                super.onPostExecute(s);
+                loading.dismiss();
+                Toast.makeText(getActivity(), s, Toast.LENGTH_LONG).show();
+            }
+
+            @Override
+            protected String doInBackground(Void... params) {
+                RequestHandler rh = new RequestHandler();
+                String s = rh.sendGetRequestParam(Config.URL_DELETE_EMP, id);
+                return s;
+            }
+        }
+
+        DeleteItem di = new DeleteItem();
+        di.execute();
+    }
+
+    private void confirmDeleteItem(){
+        AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(getActivity());
+        alertDialogBuilder.setMessage("Are you sure you want to delete this item?");
+
+        alertDialogBuilder.setPositiveButton("Yes",
+                new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface arg0, int arg1) {
+                        deleteItem();
+                        FragmentManager fm = getFragmentManager();
+                        AllItemFragment allItemFragment = new AllItemFragment();
+                        fm.beginTransaction()
+                                .replace(R.id.fl1, allItemFragment)
+                                .commit();
+                    }
+                });
+
+        alertDialogBuilder.setNegativeButton("No",
+                new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface arg0, int arg1) {
+
+                    }
+                });
+
+        AlertDialog alertDialog = alertDialogBuilder.create();
+        alertDialog.show();
     }
 }
